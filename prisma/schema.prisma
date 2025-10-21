@@ -1,0 +1,64 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./data/database.db"
+}
+
+model GuildConfig {
+  guildId     String   @id
+  channelId   String?
+  rolesCsv    String?  // Comma-separated role IDs
+  pollingSec  Int      @default(120)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("guild_configs")
+}
+
+model Vehicle {
+  guildId   String @id
+  name      String @id
+  rssUrl    String
+  createdAt DateTime @default(now())
+
+  @@map("vehicles")
+}
+
+model VehicleState {
+  guildId         String   @id
+  name            String   @id
+  lastStatus      String?
+  lastSeenAt      DateTime?
+  lastPayloadHash String?
+  updatedAt       DateTime @updatedAt
+
+  @@map("vehicle_states")
+}
+
+model Subscription {
+  guildId   String   @id
+  userId    String   @id
+  name      String   @id
+  createdAt DateTime @default(now())
+
+  @@map("subscriptions")
+}
+
+model AuditLog {
+  id        Int      @id @default(autoincrement())
+  ts        DateTime @default(now())
+  level     String
+  actorUserId String?
+  guildId   String?
+  action    String
+  target    String?
+  metaJson  String?
+
+  @@map("audit_logs")
+}
