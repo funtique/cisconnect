@@ -1,0 +1,12 @@
+{
+  "guildId": "YOUR_GUILD_ID",
+  "feeds": [
+    {
+      "url": "https://rss.example.com/feed.xml",
+      "name": "Example Feed",
+      "enabled": true
+    }
+  ],
+  "notificationChannel": "YOUR_CHANNEL_ID",
+  "lastChecked": {}
+}
