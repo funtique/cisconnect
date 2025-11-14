@@ -1,0 +1,26 @@
+services:
+  cisconnect-bot:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    container_name: cisconnect-bot
+    restart: unless-stopped
+    environment:
+      - DISCORD_TOKEN=${DISCORD_TOKEN}
+      - OWNER_ID=${OWNER_ID}
+      - DB_PATH=${DB_PATH:-/data/cisconnect.db}
+      - POLL_SECONDS=${POLL_SECONDS:-60}
+      - HTTP_TIMEOUT=${HTTP_TIMEOUT:-10}
+      - HTTP_UA=${HTTP_UA:-CISConnectBot/1.0}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    volumes:
+      - botdata:/data
+    healthcheck:
+      test: ["CMD", "bash", "-lc", "python - <<'PY'\nprint('ok')\nPY"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+volumes:
+  botdata:
