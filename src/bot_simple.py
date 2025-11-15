@@ -452,60 +452,82 @@ async def list_vehicles(interaction: discord.Interaction):
 
 @tree.command(name="status", description="Voir le statut actuel d'un véhicule")
 async def status(interaction: discord.Interaction, vehicle_name: str):
-    vehicle_id = vehicle_name.lower().replace(" ", "_")
-    
-    async with aiosqlite.connect(DB_PATH) as db:
-        # Vérifier que le véhicule existe
-        cursor = await db.execute('''
-            SELECT vehicle_name FROM vehicles
-            WHERE guild_id = ? AND vehicle_id = ?
-        ''', (str(interaction.guild_id), vehicle_id))
-        vehicle = await cursor.fetchone()
+    try:
+        vehicle_id = vehicle_name.lower().replace(" ", "_")
         
-        if not vehicle:
-            await interaction.response.send_message(f"❌ Le véhicule `{vehicle_name}` n'existe pas.", ephemeral=True)
-            return
-        
-        # Récupérer l'état
-        cursor = await db.execute('''
-            SELECT last_status, last_seen_at
-            FROM vehicle_states
-            WHERE guild_id = ? AND vehicle_id = ?
-        ''', (str(interaction.guild_id), vehicle_id))
-        state = await cursor.fetchone()
-        
-        if not state or not state[0]:
-            embed = discord.Embed(
-                title=f"📊 Statut de {vehicle[0]}",
-                description="Aucun statut disponible pour le moment.\nLe bot vérifie les flux RSS toutes les minutes.",
-                color=0x808080
-            )
-        else:
-            status_text = state[0]
-            last_seen = state[1]
+        async with aiosqlite.connect(DB_PATH) as db:
+            # Vérifier que le véhicule existe
+            cursor = await db.execute('''
+                SELECT vehicle_name FROM vehicles
+                WHERE guild_id = ? AND vehicle_id = ?
+            ''', (str(interaction.guild_id), vehicle_id))
+            vehicle = await cursor.fetchone()
             
-            # Emoji selon le statut
-            emoji_map = {
-                "Disponible": "✅",
-                "Indisponible matériel": "🔧",
-                "Indisponible opérationnel": "⚠️",
-                "Désinfection en cours": "🧽",
-                "En intervention": "🚨",
-                "Retour service": "🔄",
-                "Hors service": "❌"
-            }
-            emoji = emoji_map.get(status_text, "📊")
+            if not vehicle:
+                await interaction.response.send_message(f"❌ Le véhicule `{vehicle_name}` n'existe pas.", ephemeral=True)
+                return
             
-            embed = discord.Embed(
-                title=f"{emoji} Statut de {vehicle[0]}",
-                description=f"**Statut actuel :** {status_text}",
-                color=0x3366CC,
-                timestamp=datetime.fromisoformat(last_seen) if last_seen else None
-            )
-            if last_seen:
-                embed.set_footer(text="Dernière mise à jour")
-        
-        await interaction.response.send_message(embed=embed, ephemeral=True)
+            # Récupérer l'état
+            cursor = await db.execute('''
+                SELECT last_status, last_seen_at
+                FROM vehicle_states
+                WHERE guild_id = ? AND vehicle_id = ?
+            ''', (str(interaction.guild_id), vehicle_id))
+            state = await cursor.fetchone()
+            
+            if not state or not state[0]:
+                embed = discord.Embed(
+                    title=f"📊 Statut de {vehicle[0]}",
+                    description="Aucun statut disponible pour le moment.\nLe bot vérifie les flux RSS toutes les minutes.",
+                    color=0x808080
+                )
+            else:
+                status_text = state[0]
+                last_seen = state[1]
+                
+                # Emoji selon le statut
+                emoji_map = {
+                    "Disponible": "✅",
+                    "Indisponible matériel": "🔧",
+                    "Indisponible opérationnel": "⚠️",
+                    "Désinfection en cours": "🧽",
+                    "En intervention": "🚨",
+                    "Retour service": "🔄",
+                    "Hors service": "❌"
+                }
+                emoji = emoji_map.get(status_text, "📊")
+                
+                # Gérer le timestamp de manière sécurisée
+                timestamp = None
+                if last_seen:
+                    try:
+                        timestamp = datetime.fromisoformat(last_seen)
+                    except (ValueError, TypeError):
+                        # Si le format de date est invalide, on ignore le timestamp
+                        pass
+                
+                embed = discord.Embed(
+                    title=f"{emoji} Statut de {vehicle[0]}",
+                    description=f"**Statut actuel :** {status_text}",
+                    color=0x3366CC,
+                    timestamp=timestamp
+                )
+                if last_seen:
+                    embed.set_footer(text="Dernière mise à jour")
+            
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+    except Exception as e:
+        print(f"❌ Erreur dans la commande /status: {e}")
+        import traceback
+        traceback.print_exc()
+        try:
+            if interaction.response.is_done():
+                await interaction.followup.send("❌ Une erreur s'est produite lors de la récupération du statut.", ephemeral=True)
+            else:
+                await interaction.response.send_message("❌ Une erreur s'est produite lors de la récupération du statut.", ephemeral=True)
+        except:
+            # Si même l'envoi d'erreur échoue, on log juste
+            print("❌ Impossible d'envoyer le message d'erreur")
 
 @tree.command(name="subscribe", description="S'abonner aux notifications MP d'un véhicule")
 async def subscribe(interaction: discord.Interaction, vehicle_name: str):
