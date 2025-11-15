@@ -48,3 +48,10 @@ docker-compose*.yml
 # Fichiers temporaires
 *.tmp
 *.temp
+
+# Fichiers Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
