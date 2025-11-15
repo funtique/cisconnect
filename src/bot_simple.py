@@ -633,6 +633,24 @@ async def my_subscriptions(interaction: discord.Interaction):
     
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
+# Commande de resynchronisation (admin uniquement)
+@tree.command(name="resync", description="(Admin) Forcer la resynchronisation des commandes")
+@app_commands.checks.has_permissions(administrator=True)
+async def resync(interaction: discord.Interaction):
+    await interaction.response.defer(ephemeral=True)
+    try:
+        print("🔄 Resynchronisation forcée des commandes...")
+        synced = await tree.sync()
+        names = ", ".join(sorted([c.name for c in synced])) or "(aucune)"
+        await interaction.followup.send(f"✅ Commandes resynchronisées : {names}", ephemeral=True)
+        print(f"✅ {len(synced)} commandes resynchronisées : {names}")
+    except Exception as e:
+        error_msg = f"❌ Échec de resynchronisation : {e}"
+        await interaction.followup.send(error_msg, ephemeral=True)
+        print(error_msg)
+        import traceback
+        traceback.print_exc()
+
 # Autocomplete pour vehicle_name
 @status.autocomplete("vehicle_name")
 @subscribe.autocomplete("vehicle_name")
