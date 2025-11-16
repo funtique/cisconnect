@@ -777,14 +777,22 @@ async def vehicle_autocomplete(interaction: discord.Interaction, current: str):
     return [app_commands.Choice(name=name, value=name) for (name,) in vehicles]
 
 if __name__ == "__main__":
+    print("🔑 Vérification du token Discord...")
     token = os.getenv('DISCORD_TOKEN')
     if not token:
-        print("❌ DISCORD_TOKEN manquant")
+        print("❌ DISCORD_TOKEN manquant dans les variables d'environnement")
+        print("💡 Vérifiez que DISCORD_TOKEN est défini dans votre configuration")
         exit(1)
+    
+    print(f"✅ Token trouvé (longueur: {len(token)} caractères)")
+    print("🔌 Connexion à Discord...")
     
     try:
         client.run(token)
+    except KeyboardInterrupt:
+        print("\n⚠️ Arrêt demandé par l'utilisateur")
     except Exception as e:
-        print(f"❌ Erreur: {e}")
+        print(f"❌ Erreur fatale: {e}")
         import traceback
         traceback.print_exc()
+        exit(1)
