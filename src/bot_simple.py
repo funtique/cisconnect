@@ -283,15 +283,14 @@ async def poll_feeds():
                         # Générer le hash
                         content_hash = generate_hash(content)
                         
-                        # Si le contenu n'a pas changé, skip
-                        if old_hash == content_hash:
-                            continue
-                        
-                        # Parser le RSS
+                        # Parser le RSS (toujours parser pour voir ce qui est dedans)
                         items = parse_rss(content)
                         if not items:
                             print(f"  ⚠️ Aucun item trouvé dans le RSS pour {vehicle_name}")
-                            continue
+                            if old_hash == content_hash:
+                                continue
+                            else:
+                                continue
                         
                         print(f"  📋 {len(items)} item(s) trouvé(s) dans le RSS")
                         
@@ -305,6 +304,18 @@ async def poll_feeds():
                         
                         print(f"  📝 Statut brut extrait: {new_status_raw[:200]}")
                         print(f"  ✅ Statut normalisé: {new_status}")
+                        
+                        # Si le statut actuel n'est pas normalisé (contient le nom du véhicule),
+                        # forcer la mise à jour même si le hash n'a pas changé
+                        needs_update = False
+                        if old_status and old_status == old_status.upper() and "istres" in old_status.lower():
+                            print(f"  🔄 Statut actuel semble être le nom du véhicule, mise à jour forcée")
+                            needs_update = True
+                        
+                        # Si le contenu n'a pas changé ET que le statut est déjà normalisé, skip
+                        if old_hash == content_hash and not needs_update:
+                            print(f"  ⏭️ Contenu RSS inchangé, pas de mise à jour nécessaire")
+                            continue
                         
                         # Mettre à jour l'état
                         now = datetime.utcnow().isoformat()
