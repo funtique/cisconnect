@@ -180,6 +180,13 @@ async def poll_feeds():
             cursor = await db.execute('SELECT guild_id, poll_seconds FROM guild_configs')
             configs = await cursor.fetchall()
             
+            if not configs:
+                print("⚠️ Aucune configuration de serveur trouvée. Le polling ne s'exécutera pas.")
+                print("💡 Utilisez la commande /setup pour configurer le bot.")
+                return
+            
+            print(f"🔄 Polling démarré pour {len(configs)} serveur(s)")
+            
             for guild_id, poll_seconds in configs:
                 # Vérifier si on doit poller maintenant (simple round-robin)
                 # Pour simplifier, on poll toutes les 60s par défaut
@@ -195,6 +202,8 @@ async def poll_feeds():
                 
                 for vehicle_id, rss_url, vehicle_name in vehicles:
                     try:
+                        print(f"📡 Polling pour {vehicle_name} ({vehicle_id})...")
+                        
                         # Récupérer l'état actuel
                         cursor = await db.execute('''
                             SELECT last_status, last_payload_hash, notified_available
@@ -207,10 +216,15 @@ async def poll_feeds():
                         old_hash = state[1] if state else None
                         notified_available = state[2] if state else 0
                         
+                        print(f"  📊 Statut actuel: {old_status or 'Aucun'}")
+                        
                         # Fetch RSS
                         meta, content = await fetch_rss(rss_url)
                         if not content:
+                            print(f"  ⚠️ Impossible de récupérer le contenu RSS pour {vehicle_name}")
                             continue
+                        
+                        print(f"  ✅ RSS récupéré ({len(content)} caractères)")
                         
                         # Générer le hash
                         content_hash = generate_hash(content)
@@ -222,12 +236,18 @@ async def poll_feeds():
                         # Parser le RSS
                         items = parse_rss(content)
                         if not items:
+                            print(f"  ⚠️ Aucun item trouvé dans le RSS pour {vehicle_name}")
                             continue
+                        
+                        print(f"  📋 {len(items)} item(s) trouvé(s) dans le RSS")
                         
                         # Prendre le premier item (le plus récent)
                         latest = items[0]
                         new_status_raw = latest['status']
                         new_status = normalize_status(new_status_raw)
+                        
+                        print(f"  📝 Statut brut: {new_status_raw[:100]}")
+                        print(f"  ✅ Statut normalisé: {new_status}")
                         
                         # Mettre à jour l'état
                         now = datetime.utcnow().isoformat()
@@ -236,6 +256,8 @@ async def poll_feeds():
                             (guild_id, vehicle_id, last_status, last_seen_at, last_payload_hash, notified_available)
                             VALUES (?, ?, ?, ?, ?, ?)
                         ''', (guild_id, vehicle_id, new_status, now, content_hash, notified_available))
+                        
+                        print(f"  💾 Statut enregistré dans la base de données")
                         
                         # Détecter les changements et notifier
                         if old_status != new_status:
@@ -479,17 +501,25 @@ async def status(interaction: discord.Interaction, vehicle_name: str):
             
             if not state or not state[0]:
                 # Aucun statut enregistré - essayer de récupérer depuis le RSS maintenant
-                print(f"⚠️ Aucun statut enregistré pour {vehicle_name_db}, tentative de récupération depuis RSS...")
+                print(f"⚠️ [STATUS] Aucun statut enregistré pour {vehicle_name_db} (guild: {interaction.guild_id}, vehicle_id: {vehicle_id})")
+                print(f"   📡 Tentative de récupération depuis RSS: {rss_url}")
                 
                 try:
                     # Fetch RSS immédiatement
                     meta, content = await fetch_rss(rss_url)
+                    print(f"   📥 Réponse RSS: status={meta.get('status', 'N/A')}, content_length={len(content) if content else 0}")
+                    
                     if content:
                         items = parse_rss(content)
+                        print(f"   📋 Items parsés: {len(items)}")
+                        
                         if items:
                             latest = items[0]
                             new_status_raw = latest['status']
                             new_status = normalize_status(new_status_raw)
+                            
+                            print(f"   📝 Statut brut: {new_status_raw[:100]}")
+                            print(f"   ✅ Statut normalisé: {new_status}")
                             
                             # Enregistrer le statut
                             now = datetime.utcnow().isoformat()
@@ -503,17 +533,23 @@ async def status(interaction: discord.Interaction, vehicle_name: str):
                             
                             status_text = new_status
                             last_seen = now
-                            print(f"✅ Statut récupéré depuis RSS pour {vehicle_name_db}: {new_status}")
+                            print(f"   💾 Statut enregistré: {new_status}")
                         else:
+                            print(f"   ⚠️ Aucun item trouvé dans le RSS")
                             status_text = None
                             last_seen = None
                     else:
+                        print(f"   ❌ Aucun contenu RSS récupéré")
                         status_text = None
                         last_seen = None
                 except Exception as e:
-                    print(f"❌ Erreur lors de la récupération RSS pour {vehicle_name_db}: {e}")
+                    print(f"   ❌ Erreur lors de la récupération RSS: {e}")
+                    import traceback
+                    traceback.print_exc()
                     status_text = None
                     last_seen = None
+            else:
+                print(f"✅ [STATUS] Statut trouvé pour {vehicle_name_db}: {state[0]} (dernière mise à jour: {state[1]})")
                 
                 if not status_text:
                     embed = discord.Embed(
