@@ -137,12 +137,16 @@ def generate_hash(content: str) -> str:
 
 @client.event
 async def on_ready():
+    print("=" * 60)
     print(f"🔗 Connecté en tant que {client.user}")
+    print(f"🆔 ID du bot: {client.user.id}")
+    print("=" * 60)
     
     # Initialiser la base de données
     try:
+        print("🗄️ Initialisation de la base de données...")
         await init_db()
-        print("✅ Base de données initialisée")
+        print(f"✅ Base de données initialisée (chemin: {DB_PATH})")
     except Exception as e:
         print(f"❌ Erreur DB: {e}")
         import traceback
@@ -154,26 +158,47 @@ async def on_ready():
         synced = await tree.sync()
         print(f"✅ {len(synced)} commandes synchronisées globalement")
         for cmd in synced:
-            print(f"  - {cmd.name}: {cmd.description}")
+            print(f"  - /{cmd.name}: {cmd.description}")
     except Exception as e:
         print(f"❌ Erreur sync globale: {e}")
         import traceback
         traceback.print_exc()
     
+    # Vérifier la configuration avant de démarrer le polling
+    try:
+        async with aiosqlite.connect(DB_PATH) as db:
+            cursor = await db.execute('SELECT COUNT(*) FROM guild_configs')
+            config_count = (await cursor.fetchone())[0]
+            print(f"📊 Configurations de serveur trouvées: {config_count}")
+            
+            if config_count == 0:
+                print("⚠️ ATTENTION: Aucune configuration de serveur trouvée!")
+                print("💡 Le polling ne s'exécutera pas tant qu'aucun serveur n'est configuré avec /setup")
+            else:
+                cursor = await db.execute('SELECT guild_id FROM guild_configs')
+                guilds = await cursor.fetchall()
+                print(f"📋 Serveurs configurés: {', '.join([g[0] for g in guilds])}")
+    except Exception as e:
+        print(f"⚠️ Erreur lors de la vérification de la configuration: {e}")
+    
     # Démarrer le polling
     try:
+        print("🚀 Démarrage du polling RSS...")
         poll_feeds.start()
-        print("✅ Polling RSS démarré")
+        print("✅ Polling RSS démarré (s'exécutera toutes les 60 secondes)")
     except Exception as e:
         print(f"❌ Erreur démarrage polling: {e}")
         import traceback
         traceback.print_exc()
     
+    print("=" * 60)
     print("✅ Bot prêt !")
+    print("=" * 60)
 
 @tasks.loop(seconds=60)
 async def poll_feeds():
     """Polling automatique des flux RSS"""
+    print(f"\n⏰ [POLLING] Démarrage du cycle de polling - {datetime.utcnow().isoformat()}")
     try:
         async with aiosqlite.connect(DB_PATH) as db:
             # Récupérer toutes les configurations
