@@ -553,6 +553,17 @@ async def status(interaction: discord.Interaction, vehicle_name: str):
                 last_seen = state[1]
                 print(f"✅ [STATUS] Statut trouvé pour {vehicle_name_db}: {status_text} (dernière mise à jour: {last_seen})")
             
+            # Si toujours pas de statut après toutes les tentatives
+            if not status_text:
+                embed = discord.Embed(
+                    title=f"📊 Statut de {vehicle_name_db}",
+                    description="Aucun statut disponible pour le moment.\nLe bot vérifie les flux RSS toutes les minutes.\n\n⚠️ Le polling n'a peut-être pas encore tourné ou le flux RSS est inaccessible.",
+                    color=0x808080
+                )
+                embed.add_field(name="URL RSS", value=rss_url[:100] + "..." if len(rss_url) > 100 else rss_url, inline=False)
+                await interaction.response.send_message(embed=embed, ephemeral=True)
+                return
+            
             # Emoji selon le statut
             emoji_map = {
                 "Disponible": "✅",
