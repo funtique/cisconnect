@@ -456,9 +456,9 @@ async def status(interaction: discord.Interaction, vehicle_name: str):
         vehicle_id = vehicle_name.lower().replace(" ", "_")
         
         async with aiosqlite.connect(DB_PATH) as db:
-            # Vérifier que le véhicule existe
+            # Vérifier que le véhicule existe et récupérer l'URL RSS
             cursor = await db.execute('''
-                SELECT vehicle_name FROM vehicles
+                SELECT vehicle_name, rss_url FROM vehicles
                 WHERE guild_id = ? AND vehicle_id = ?
             ''', (str(interaction.guild_id), vehicle_id))
             vehicle = await cursor.fetchone()
@@ -467,53 +467,96 @@ async def status(interaction: discord.Interaction, vehicle_name: str):
                 await interaction.response.send_message(f"❌ Le véhicule `{vehicle_name}` n'existe pas.", ephemeral=True)
                 return
             
+            vehicle_name_db, rss_url = vehicle
+            
             # Récupérer l'état
             cursor = await db.execute('''
-                SELECT last_status, last_seen_at
+                SELECT last_status, last_seen_at, last_payload_hash
                 FROM vehicle_states
                 WHERE guild_id = ? AND vehicle_id = ?
             ''', (str(interaction.guild_id), vehicle_id))
             state = await cursor.fetchone()
             
             if not state or not state[0]:
-                embed = discord.Embed(
-                    title=f"📊 Statut de {vehicle[0]}",
-                    description="Aucun statut disponible pour le moment.\nLe bot vérifie les flux RSS toutes les minutes.",
-                    color=0x808080
-                )
+                # Aucun statut enregistré - essayer de récupérer depuis le RSS maintenant
+                print(f"⚠️ Aucun statut enregistré pour {vehicle_name_db}, tentative de récupération depuis RSS...")
+                
+                try:
+                    # Fetch RSS immédiatement
+                    meta, content = await fetch_rss(rss_url)
+                    if content:
+                        items = parse_rss(content)
+                        if items:
+                            latest = items[0]
+                            new_status_raw = latest['status']
+                            new_status = normalize_status(new_status_raw)
+                            
+                            # Enregistrer le statut
+                            now = datetime.utcnow().isoformat()
+                            content_hash = generate_hash(content)
+                            await db.execute('''
+                                INSERT OR REPLACE INTO vehicle_states 
+                                (guild_id, vehicle_id, last_status, last_seen_at, last_payload_hash, notified_available)
+                                VALUES (?, ?, ?, ?, ?, 0)
+                            ''', (str(interaction.guild_id), vehicle_id, new_status, now, content_hash))
+                            await db.commit()
+                            
+                            status_text = new_status
+                            last_seen = now
+                            print(f"✅ Statut récupéré depuis RSS pour {vehicle_name_db}: {new_status}")
+                        else:
+                            status_text = None
+                            last_seen = None
+                    else:
+                        status_text = None
+                        last_seen = None
+                except Exception as e:
+                    print(f"❌ Erreur lors de la récupération RSS pour {vehicle_name_db}: {e}")
+                    status_text = None
+                    last_seen = None
+                
+                if not status_text:
+                    embed = discord.Embed(
+                        title=f"📊 Statut de {vehicle_name_db}",
+                        description="Aucun statut disponible pour le moment.\nLe bot vérifie les flux RSS toutes les minutes.\n\n⚠️ Le polling n'a peut-être pas encore tourné ou le flux RSS est inaccessible.",
+                        color=0x808080
+                    )
+                    embed.add_field(name="URL RSS", value=rss_url[:100] + "..." if len(rss_url) > 100 else rss_url, inline=False)
+                    await interaction.response.send_message(embed=embed, ephemeral=True)
+                    return
             else:
                 status_text = state[0]
                 last_seen = state[1]
-                
-                # Emoji selon le statut
-                emoji_map = {
-                    "Disponible": "✅",
-                    "Indisponible matériel": "🔧",
-                    "Indisponible opérationnel": "⚠️",
-                    "Désinfection en cours": "🧽",
-                    "En intervention": "🚨",
-                    "Retour service": "🔄",
-                    "Hors service": "❌"
-                }
-                emoji = emoji_map.get(status_text, "📊")
-                
-                # Gérer le timestamp de manière sécurisée
-                timestamp = None
-                if last_seen:
-                    try:
-                        timestamp = datetime.fromisoformat(last_seen)
-                    except (ValueError, TypeError):
-                        # Si le format de date est invalide, on ignore le timestamp
-                        pass
-                
-                embed = discord.Embed(
-                    title=f"{emoji} Statut de {vehicle[0]}",
-                    description=f"**Statut actuel :** {status_text}",
-                    color=0x3366CC,
-                    timestamp=timestamp
-                )
-                if last_seen:
-                    embed.set_footer(text="Dernière mise à jour")
+            
+            # Emoji selon le statut
+            emoji_map = {
+                "Disponible": "✅",
+                "Indisponible matériel": "🔧",
+                "Indisponible opérationnel": "⚠️",
+                "Désinfection en cours": "🧽",
+                "En intervention": "🚨",
+                "Retour service": "🔄",
+                "Hors service": "❌"
+            }
+            emoji = emoji_map.get(status_text, "📊")
+            
+            # Gérer le timestamp de manière sécurisée
+            timestamp = None
+            if last_seen:
+                try:
+                    timestamp = datetime.fromisoformat(last_seen)
+                except (ValueError, TypeError):
+                    # Si le format de date est invalide, on ignore le timestamp
+                    pass
+            
+            embed = discord.Embed(
+                title=f"{emoji} Statut de {vehicle_name_db}",
+                description=f"**Statut actuel :** {status_text}",
+                color=0x3366CC,
+                timestamp=timestamp
+            )
+            if last_seen:
+                embed.set_footer(text="Dernière mise à jour")
             
             await interaction.response.send_message(embed=embed, ephemeral=True)
     except Exception as e:
