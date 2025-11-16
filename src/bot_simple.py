@@ -2,6 +2,12 @@
 """
 Bot Discord pour la surveillance des véhicules via flux RSS
 """
+import sys
+print("=" * 60)
+print("🚀 Démarrage du bot CIS Connect...")
+print(f"🐍 Python version: {sys.version}")
+print("=" * 60)
+
 import discord
 from discord import app_commands
 from discord.ext import tasks
