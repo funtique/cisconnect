@@ -125,16 +125,39 @@ def parse_rss(content: str) -> list[dict]:
         feed = feedparser.parse(content)
         items = []
         for entry in feed.entries[:5]:  # Prendre les 5 plus récents
-            status = entry.get('title', '') or entry.get('description', '')
+            title = entry.get('title', '')
+            description = entry.get('description', '')
+            
+            # Pour monpompier.com, le statut est généralement dans la description
+            # Le titre contient souvent le nom du véhicule (ex: "FS 1 Istres")
+            # On cherche le statut dans la description en priorité
+            status = description if description else title
+            
+            # Si la description est vide ou contient juste le nom du véhicule,
+            # essayer d'extraire le statut du titre ou de la description
+            # En général, le statut contient des mots-clés comme "Disponible", "Indisponible", etc.
+            if not status or len(status) < 5:
+                status = title
+            
+            # Nettoyer le statut (enlever les balises HTML si présentes)
+            if status:
+                # Enlever les balises HTML simples
+                import re
+                status = re.sub(r'<[^>]+>', '', status)
+                status = status.strip()
+            
             items.append({
                 'status': status,
-                'description': entry.get('description', ''),
+                'description': description,
+                'title': title,
                 'published': entry.get('published', ''),
                 'link': entry.get('link', '')
             })
         return items
     except Exception as e:
         print(f"❌ Erreur parse RSS: {e}")
+        import traceback
+        traceback.print_exc()
         return []
 
 def generate_hash(content: str) -> str:
@@ -274,10 +297,13 @@ async def poll_feeds():
                         
                         # Prendre le premier item (le plus récent)
                         latest = items[0]
+                        print(f"  📄 Titre RSS: {latest.get('title', 'N/A')[:100]}")
+                        print(f"  📄 Description RSS: {latest.get('description', 'N/A')[:200]}")
+                        
                         new_status_raw = latest['status']
                         new_status = normalize_status(new_status_raw)
                         
-                        print(f"  📝 Statut brut: {new_status_raw[:100]}")
+                        print(f"  📝 Statut brut extrait: {new_status_raw[:200]}")
                         print(f"  ✅ Statut normalisé: {new_status}")
                         
                         # Mettre à jour l'état
