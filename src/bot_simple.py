@@ -119,6 +119,60 @@ async def fetch_rss(url: str) -> tuple[dict, str | None]:
         print(f"❌ Erreur fetch RSS {url}: {e}")
         return {}, None
 
+def extract_status_from_description(description: str) -> str:
+    """Extrait le statut réel depuis une description HTML/brute"""
+    if not description:
+        return ""
+    
+    import re
+    
+    # Nettoyer le HTML
+    status = re.sub(r'<[^>]+>', '', description)
+    
+    # Chercher des mots-clés de statut dans le texte
+    status_lower = status.lower()
+    
+    # Mots-clés de statut possibles
+    status_keywords = [
+        ("disponible", "Disponible"),
+        ("indisponible matériel", "Indisponible matériel"),
+        ("indisponible opérationnel", "Indisponible opérationnel"),
+        ("indisponible", "Indisponible opérationnel"),
+        ("désinfection", "Désinfection en cours"),
+        ("intervention", "En intervention"),
+        ("retour service", "Retour service"),
+        ("hors service", "Hors service"),
+    ]
+    
+    # Chercher le premier mot-clé trouvé
+    for keyword, normalized in status_keywords:
+        if keyword in status_lower:
+            # Essayer d'extraire une phrase complète contenant le statut
+            # Chercher autour du mot-clé (50 caractères avant et après)
+            pattern = f".{{0,50}}{re.escape(keyword)}.{{0,50}}"
+            match = re.search(pattern, status_lower, re.IGNORECASE)
+            if match:
+                extracted = match.group(0).strip()
+                # Nettoyer les caractères spéciaux et dates
+                extracted = re.sub(r'\d+[/-]\d+[/-]\d+', '', extracted)  # Enlever les dates
+                extracted = re.sub(r'%[^%]*%', '', extracted)  # Enlever les pourcentages
+                extracted = re.sub(r'\d+', '', extracted)  # Enlever les nombres isolés
+                extracted = re.sub(r'[^\w\s]', ' ', extracted)  # Garder seulement lettres et espaces
+                extracted = ' '.join(extracted.split())  # Normaliser les espaces
+                
+                if len(extracted) > 3:
+                    return normalized
+    
+    # Si aucun mot-clé trouvé, chercher dans le titre ou retourner une version nettoyée
+    # Enlever les dates et nombres
+    cleaned = re.sub(r'\d+[/-]\d+[/-]\d+', '', status)
+    cleaned = re.sub(r'%[^%]*%', '', cleaned)
+    cleaned = re.sub(r'\d+', '', cleaned)
+    cleaned = re.sub(r'[^\w\s]', ' ', cleaned)
+    cleaned = ' '.join(cleaned.split())
+    
+    return cleaned[:100] if cleaned else ""
+
 def parse_rss(content: str) -> list[dict]:
     """Parse le contenu RSS et retourne les items"""
     try:
@@ -128,22 +182,19 @@ def parse_rss(content: str) -> list[dict]:
             title = entry.get('title', '')
             description = entry.get('description', '')
             
-            # Pour monpompier.com, le statut est généralement dans la description
-            # Le titre contient souvent le nom du véhicule (ex: "FS 1 Istres")
-            # On cherche le statut dans la description en priorité
-            status = description if description else title
+            # Extraire le statut depuis la description
+            status = extract_status_from_description(description)
             
-            # Si la description est vide ou contient juste le nom du véhicule,
-            # essayer d'extraire le statut du titre ou de la description
-            # En général, le statut contient des mots-clés comme "Disponible", "Indisponible", etc.
-            if not status or len(status) < 5:
-                status = title
+            # Si pas de statut trouvé dans la description, utiliser le titre
+            if not status or len(status) < 3:
+                status = extract_status_from_description(title) if title else ""
             
-            # Nettoyer le statut (enlever les balises HTML si présentes)
-            if status:
-                # Enlever les balises HTML simples
+            # Si toujours rien, utiliser le titre brut nettoyé
+            if not status or len(status) < 3:
                 import re
-                status = re.sub(r'<[^>]+>', '', status)
+                status = re.sub(r'<[^>]+>', '', title)
+                status = re.sub(r'\d+[/-]\d+[/-]\d+', '', status)  # Enlever les dates
+                status = ' '.join(status.split())
                 status = status.strip()
             
             items.append({
