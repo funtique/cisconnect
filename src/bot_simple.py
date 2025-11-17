@@ -281,20 +281,28 @@ def parse_rss(content: str) -> list[dict]:
             title = entry.get('title', '')
             description = entry.get('description', '')
             
+            print(f"  📄 [PARSE] Titre brut: '{title}'")
+            print(f"  📄 [PARSE] Description brute: '{description[:200]}...'")
+            
             # Extraire le statut depuis la description
             status = extract_status_from_description(description)
+            print(f"  📊 [PARSE] Statut extrait depuis description: '{status}'")
             
             # Si pas de statut trouvé dans la description, utiliser le titre
             if not status or len(status) < 3:
+                print(f"  ⚠️ [PARSE] Statut vide ou trop court, tentative depuis le titre...")
                 status = extract_status_from_description(title) if title else ""
+                print(f"  📊 [PARSE] Statut extrait depuis titre: '{status}'")
             
             # Si toujours rien, utiliser le titre brut nettoyé
             if not status or len(status) < 3:
+                print(f"  ⚠️ [PARSE] Toujours pas de statut, utilisation du titre brut nettoyé...")
                 import re
                 status = re.sub(r'<[^>]+>', '', title)
                 status = re.sub(r'\d+[/-]\d+[/-]\d+', '', status)  # Enlever les dates
                 status = ' '.join(status.split())
                 status = status.strip()
+                print(f"  📊 [PARSE] Statut final (titre brut nettoyé): '{status}'")
             
             items.append({
                 'status': status,
