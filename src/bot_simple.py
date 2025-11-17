@@ -497,12 +497,16 @@ async def poll_feeds():
                         print(f"  📝 Statut brut extrait: {new_status_raw[:200]}")
                         print(f"  ✅ Statut normalisé: {new_status}")
                         
-                        # Si le statut actuel n'est pas normalisé (contient le nom du véhicule),
+                        # Si le statut actuel n'est pas normalisé (contient le nom du véhicule ou "Inconnu"),
                         # forcer la mise à jour même si le hash n'a pas changé
                         needs_update = False
-                        if old_status and old_status == old_status.upper() and "istres" in old_status.lower():
-                            print(f"  🔄 Statut actuel semble être le nom du véhicule, mise à jour forcée")
-                            needs_update = True
+                        if old_status:
+                            if old_status == "Inconnu":
+                                print(f"  🔄 Statut actuel est 'Inconnu', mise à jour forcée pour réessayer l'extraction")
+                                needs_update = True
+                            elif old_status == old_status.upper() and "istres" in old_status.lower():
+                                print(f"  🔄 Statut actuel semble être le nom du véhicule, mise à jour forcée")
+                                needs_update = True
                         
                         # Si le contenu n'a pas changé ET que le statut est déjà normalisé, skip
                         if old_hash == content_hash and not needs_update:
