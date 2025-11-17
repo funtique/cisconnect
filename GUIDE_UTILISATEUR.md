@@ -159,6 +159,140 @@ Ces commandes peuvent être utilisées par tous les membres du serveur.
 
 ---
 
+### `/status`
+
+**Description** : Affiche le statut actuel d'un véhicule (Disponible, Indisponible, En intervention, etc.).
+
+**Paramètres** :
+- `vehicle_name` (obligatoire) : Le nom du véhicule (avec autocomplétion)
+
+**Exemple** :
+```
+/status vehicle_name:"FS 1 Istres"
+```
+
+**Ce que fait la commande** :
+- Récupère le statut actuel du véhicule depuis la base de données
+- Si aucun statut n'est disponible, récupère directement depuis le flux RSS
+- Affiche le statut normalisé avec un emoji approprié
+- Affiche la date de dernière mise à jour
+
+**Réponse** :
+- Un embed Discord avec :
+  - 📊 Emoji selon le statut (✅ Disponible, 🔧 Indisponible matériel, ⚠️ Indisponible opérationnel, etc.)
+  - Le statut actuel normalisé
+  - La date de dernière mise à jour
+- ❌ Message d'erreur si le véhicule n'existe pas
+- ⚠️ Message si aucun statut n'est disponible (le polling n'a peut-être pas encore tourné)
+
+**Statuts possibles** :
+- ✅ **Disponible** : Le véhicule est disponible
+- 🔧 **Indisponible matériel** : Le véhicule est indisponible pour maintenance matérielle
+- ⚠️ **Indisponible opérationnel** : Le véhicule est indisponible pour raisons opérationnelles
+- 🧽 **Désinfection en cours** : Le véhicule est en cours de désinfection
+- 🚨 **En intervention** : Le véhicule est actuellement en intervention
+- 🔄 **Retour service** : Le véhicule est en train de revenir en service
+- ❌ **Hors service** : Le véhicule est hors service
+
+**Note** : Le bot vérifie les flux RSS toutes les minutes. Si aucun statut n'est disponible, la commande tentera de récupérer le statut directement depuis le RSS.
+
+---
+
+### `/subscribe`
+
+**Description** : S'abonner aux notifications MP (messages privés) d'un véhicule. Vous recevrez une notification quand le véhicule redevient disponible.
+
+**Paramètres** :
+- `vehicle_name` (obligatoire) : Le nom du véhicule (avec autocomplétion)
+
+**Exemple** :
+```
+/subscribe vehicle_name:"FS 1 Istres"
+```
+
+**Ce que fait la commande** :
+- Vérifie que le véhicule existe
+- Vérifie que vous n'êtes pas déjà abonné
+- Crée l'abonnement dans la base de données
+
+**Réponse** :
+- ✅ Message de confirmation avec les détails de l'abonnement
+- ❌ Message d'erreur si le véhicule n'existe pas
+- ℹ️ Message si vous êtes déjà abonné
+
+**Note** : Vous recevrez une notification MP **une seule fois** la prochaine fois que le véhicule devient disponible. Après cela, vous devrez vous réabonner pour recevoir une nouvelle notification.
+
+---
+
+### `/unsubscribe`
+
+**Description** : Se désabonner des notifications MP d'un véhicule.
+
+**Paramètres** :
+- `vehicle_name` (obligatoire) : Le nom du véhicule (avec autocomplétion)
+
+**Exemple** :
+```
+/unsubscribe vehicle_name:"FS 1 Istres"
+```
+
+**Ce que fait la commande** :
+- Vérifie que le véhicule existe
+- Supprime votre abonnement
+
+**Réponse** :
+- ✅ Message de confirmation
+- ❌ Message d'erreur si le véhicule n'existe pas
+- ℹ️ Message si vous n'étiez pas abonné
+
+---
+
+### `/my_subscriptions`
+
+**Description** : Affiche tous vos abonnements aux véhicules sur tous les serveurs.
+
+**Paramètres** : Aucun
+
+**Exemple** :
+```
+/my_subscriptions
+```
+
+**Ce que fait la commande** :
+- Récupère tous vos abonnements depuis la base de données
+- Affiche la liste des véhicules auxquels vous êtes abonné
+
+**Réponse** :
+- Un embed Discord avec la liste de vos abonnements
+- ℹ️ Message si vous n'êtes abonné à aucun véhicule
+
+---
+
+## 👑 Commandes Administrateur (suite)
+
+### `/resync`
+
+**Description** : Force la resynchronisation des commandes slash sur le serveur. Utile si les commandes ne s'affichent pas correctement.
+
+**Paramètres** : Aucun
+
+**Exemple** :
+```
+/resync
+```
+
+**Ce que fait la commande** :
+- Force la resynchronisation des commandes sur le serveur
+- Affiche la liste des commandes synchronisées
+
+**Réponse** :
+- ✅ Liste des commandes resynchronisées
+- ❌ Message d'erreur en cas d'échec
+
+**Note** : Cette commande est utile si les commandes ne s'affichent pas après une mise à jour du bot. Elle permet de forcer la mise à jour sans attendre le cache Discord.
+
+---
+
 ## 📝 Exemples d'utilisation
 
 ### Scénario 1 : Configuration initiale d'un nouveau serveur
@@ -209,8 +343,11 @@ Ces commandes peuvent être utilisées par tous les membres du serveur.
 
 **R:** Les commandes slash peuvent prendre 1-2 minutes pour apparaître après l'invitation du bot. Si elles n'apparaissent toujours pas :
 - Vérifiez que le bot est en ligne
+- Utilisez `/resync` (admin) pour forcer la synchronisation
 - Réinvitez le bot avec les bonnes permissions
 - Utilisez `/test` pour vérifier la connexion
+
+**Note** : Le bot synchronise automatiquement les commandes sur le serveur de développement pour éviter le cache Discord.
 
 ### Q: Je reçois une erreur "Configuration générale manquante"
 

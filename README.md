@@ -72,10 +72,18 @@ Voir [GUIDE_UTILISATEUR.md](GUIDE_UTILISATEUR.md) pour la documentation complèt
 
 ### Commandes disponibles
 
-- `/test` - Tester la connexion du bot
-- `/setup` - Configurer le bot pour le serveur (Admin)
-- `/add_vehicle` - Ajouter un véhicule à surveiller (Admin)
+**Commandes Administrateur :**
+- `/setup` - Configurer le bot pour le serveur
+- `/add_vehicle` - Ajouter un véhicule à surveiller
 - `/list_vehicles` - Lister les véhicules configurés
+- `/resync` - Forcer la resynchronisation des commandes
+
+**Commandes Utilisateur :**
+- `/test` - Tester la connexion du bot
+- `/status` - Voir le statut actuel d'un véhicule
+- `/subscribe` - S'abonner aux notifications MP d'un véhicule
+- `/unsubscribe` - Se désabonner des notifications d'un véhicule
+- `/my_subscriptions` - Voir mes abonnements
 
 ## 🏗️ Architecture
 
