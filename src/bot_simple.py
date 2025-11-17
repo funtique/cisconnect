@@ -19,6 +19,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 from datetime import datetime
 import hashlib
+import re
 
 load_dotenv()
 
@@ -210,8 +211,6 @@ def extract_status_from_description(description: str) -> str:
     if not description:
         return ""
     
-    import re
-    
     # Nettoyer le HTML
     status = re.sub(r'<[^>]+>', '', description)
     
@@ -297,7 +296,6 @@ def parse_rss(content: str) -> list[dict]:
             # Si toujours rien, utiliser le titre brut nettoyé
             if not status or len(status) < 3:
                 print(f"  ⚠️ [PARSE] Toujours pas de statut, utilisation du titre brut nettoyé...")
-                import re
                 status = re.sub(r'<[^>]+>', '', title)
                 status = re.sub(r'\d+[/-]\d+[/-]\d+', '', status)  # Enlever les dates
                 status = ' '.join(status.split())
