@@ -108,13 +108,20 @@ def normalize_status(status: str) -> str:
         return "Inconnu"
     
     # Si le statut contient juste le nom du véhicule (ex: "FS Istres", "FS 1 Istres"), retourner "Inconnu"
-    # Mais on accepte les statuts qui contiennent "fs" dans d'autres contextes (ex: "sur les lieux" contient "sur")
-    if ("istres" in status_lower or "eyguieres" in status_lower) and len(status_lower) < 20:
-        # Si c'est juste le nom du véhicule (court et contient le nom de la ville), c'est probablement le nom
-        return "Inconnu"
+    # On vérifie si le statut est principalement composé du nom du véhicule
+    # En vérifiant si le statut ne contient QUE des mots liés au véhicule (fs, istres, eyguieres, etc.)
+    vehicle_name_patterns = [
+        r'^(fs|fs\s*\d+|istres|eyguieres)(\s+(fs|fs\s*\d+|istres|eyguieres))*$',
+        r'^(fs|fs\s*\d+)\s+(istres|eyguieres)$',
+    ]
+    for pattern in vehicle_name_patterns:
+        if re.match(pattern, status_lower):
+            print(f"  ⚠️ [NORMALIZE] Statut rejeté (nom de véhicule uniquement): '{status_clean}'")
+            return "Inconnu"
     
     # Si le statut est exactement "fs" ou "fs1" ou similaire (juste le nom du véhicule), retourner "Inconnu"
-    if status_lower in ["fs", "fs1", "fs 1", "fs 1 istres", "fs istres"]:
+    if status_lower in ["fs", "fs1", "fs 1", "fs 1 istres", "fs istres", "istres", "eyguieres"]:
+        print(f"  ⚠️ [NORMALIZE] Statut rejeté (nom de véhicule exact): '{status_clean}'")
         return "Inconnu"
     
     # Statuts exacts du flux RSS (selon https://monpompier.com/flux/vehicules/2439.xml)
@@ -147,6 +154,7 @@ def normalize_status(status: str) -> str:
     # Chercher une correspondance exacte (insensible à la casse)
     for key, normalized in status_mapping.items():
         if status_lower == key:
+            print(f"  ✅ [NORMALIZE] Correspondance exacte trouvée: '{status_clean}' -> '{normalized}'")
             return normalized
     
     # Chercher une correspondance partielle pour les variantes
@@ -168,8 +176,10 @@ def normalize_status(status: str) -> str:
             return "Indisponible opérationnel"
     elif "sur les lieux" in status_lower:
         if "se rend" in status_lower:
+            print(f"  ✅ [NORMALIZE] Statut reconnu (partiel): '{status_clean}' -> 'Se rend sur les lieux'")
             return "Se rend sur les lieux"
         else:
+            print(f"  ✅ [NORMALIZE] Statut reconnu (partiel): '{status_clean}' -> 'Sur les lieux'")
             return "Sur les lieux"
     elif "alerté" in status_lower or "alerte" in status_lower:
         return "Alerté"
@@ -227,9 +237,13 @@ def extract_status_from_description(description: str) -> str:
             extracted_status = match.group(1).strip()
             print(f"  🔍 [EXTRACT] Statut extrait après 'est :': '{extracted_status}'")
             
-            # Nettoyer le statut extrait
+            # Nettoyer le statut extrait : enlever les dates, pourcentages, et le nom du véhicule
             extracted_status = re.sub(r'\d+[/-]\d+[/-]\d+', '', extracted_status)  # Enlever les dates
             extracted_status = re.sub(r'%[^%]*%', '', extracted_status)  # Enlever les pourcentages
+            
+            # Enlever les références au nom du véhicule (FS, FS 1, Istres, Eyguières, etc.)
+            extracted_status = re.sub(r'\b(fs|fs\s*\d+|istres|eyguieres)\b', '', extracted_status, flags=re.IGNORECASE)
+            extracted_status = re.sub(r'\s+', ' ', extracted_status)  # Normaliser les espaces
             extracted_status = extracted_status.strip()
             
             if len(extracted_status) > 2:
