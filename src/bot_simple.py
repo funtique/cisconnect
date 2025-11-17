@@ -82,38 +82,85 @@ async def init_db():
         await db.commit()
 
 def normalize_status(status: str) -> str:
-    """Normalise le statut du véhicule"""
+    """Normalise le statut du véhicule selon les statuts du flux RSS monpompier.com"""
     if not status:
         return "Inconnu"
-    status_lower = status.lower().strip()
     
-    # Statuts normalisés
+    status_clean = status.strip()
+    status_lower = status_clean.lower()
+    
+    # Si le statut contient juste le nom du véhicule ou des données brutes, retourner "Inconnu"
+    if len(status_lower) < 3 or "istres" in status_lower or ("fs" in status_lower and "sur" not in status_lower):
+        return "Inconnu"
+    
+    # Statuts exacts du flux RSS (selon https://monpompier.com/flux/vehicules/2439.xml)
+    status_mapping = {
+        # Statuts disponibles
+        "disponible": "Disponible",
+        "disponible matériel": "Disponible matériel",
+        "rentre disponible": "Rentre disponible",
+        
+        # Statuts indisponibles
+        "rentre indisponible": "Rentre indisponible",
+        "indisponible": "Indisponible opérationnel",
+        "indisponible matériel": "Indisponible matériel",
+        "indisponible opérationnel": "Indisponible opérationnel",
+        
+        # Statuts d'intervention
+        "sur les lieux": "Sur les lieux",
+        "se rend sur les lieux": "Se rend sur les lieux",
+        "alerté": "Alerté",
+        "en intervention": "En intervention",
+        
+        # Autres statuts
+        "désinfection": "Désinfection en cours",
+        "désinfection en cours": "Désinfection en cours",
+        "retour service": "Retour service",
+        "retour": "Retour service",
+        "hors service": "Hors service",
+    }
+    
+    # Chercher une correspondance exacte (insensible à la casse)
+    for key, normalized in status_mapping.items():
+        if status_lower == key:
+            return normalized
+    
+    # Chercher une correspondance partielle pour les variantes
     if "disponible" in status_lower and "indisponible" not in status_lower:
-        return "Disponible"
-    elif "indisponible" in status_lower and "matériel" in status_lower:
-        return "Indisponible matériel"
+        if "matériel" in status_lower:
+            return "Disponible matériel"
+        elif "rentre" in status_lower:
+            return "Rentre disponible"
+        else:
+            return "Disponible"
     elif "indisponible" in status_lower:
-        return "Indisponible opérationnel"
+        if "matériel" in status_lower:
+            return "Indisponible matériel"
+        elif "rentre" in status_lower:
+            return "Rentre indisponible"
+        elif "opérationnel" in status_lower:
+            return "Indisponible opérationnel"
+        else:
+            return "Indisponible opérationnel"
+    elif "sur les lieux" in status_lower:
+        if "se rend" in status_lower:
+            return "Se rend sur les lieux"
+        else:
+            return "Sur les lieux"
+    elif "alerté" in status_lower or "alerte" in status_lower:
+        return "Alerté"
     elif "désinfection" in status_lower:
         return "Désinfection en cours"
-    elif "intervention" in status_lower or "sur les lieux" in status_lower:
-        return "En intervention"
-    elif "retour" in status_lower or "retour service" in status_lower:
+    elif "retour" in status_lower:
         return "Retour service"
     elif "hors service" in status_lower:
         return "Hors service"
     
-    # Si le statut contient juste le nom du véhicule ou des données brutes, retourner "Inconnu"
-    # pour éviter d'afficher le nom du véhicule comme statut
-    if len(status_lower) < 3 or "istres" in status_lower or "fs" in status_lower:
-        return "Inconnu"
+    # Si le statut n'est pas reconnu, logger et retourner tel quel (sans modification)
+    print(f"⚠️ Statut non reconnu: '{status_clean}' - Ajoutez-le à la fonction normalize_status si nécessaire")
     
-    # Si le statut n'est pas reconnu, logger pour pouvoir l'ajouter plus tard
-    print(f"⚠️ Statut non reconnu: '{status}' - Ajoutez-le à la fonction normalize_status si nécessaire")
-    
-    # Retourner le statut tel quel (capitalisé) pour l'afficher quand même
-    # Cela permet de voir les nouveaux statuts et de les ajouter à la normalisation
-    return status.strip().capitalize()
+    # Retourner le statut tel quel (sans capitalisation ni modification)
+    return status_clean
 
 async def fetch_rss(url: str) -> tuple[dict, str | None]:
     """Récupère le contenu RSS"""
