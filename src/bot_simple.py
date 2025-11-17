@@ -108,7 +108,11 @@ def normalize_status(status: str) -> str:
     if len(status_lower) < 3 or "istres" in status_lower or "fs" in status_lower:
         return "Inconnu"
     
-    # Sinon, retourner le statut tel quel (capitalisé)
+    # Si le statut n'est pas reconnu, logger pour pouvoir l'ajouter plus tard
+    print(f"⚠️ Statut non reconnu: '{status}' - Ajoutez-le à la fonction normalize_status si nécessaire")
+    
+    # Retourner le statut tel quel (capitalisé) pour l'afficher quand même
+    # Cela permet de voir les nouveaux statuts et de les ajouter à la normalisation
     return status.strip().capitalize()
 
 async def fetch_rss(url: str) -> tuple[dict, str | None]:
