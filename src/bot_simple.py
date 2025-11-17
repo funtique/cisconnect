@@ -103,8 +103,18 @@ def normalize_status(status: str) -> str:
     status_lower = status_clean.lower()
     
     # Si le statut contient juste le nom du véhicule ou des données brutes, retourner "Inconnu"
-    if len(status_lower) < 3 or "istres" in status_lower or ("fs" in status_lower and "sur" not in status_lower):
+    # Mais seulement si c'est vraiment juste le nom (pas un statut valide qui contient accidentellement ces mots)
+    if len(status_lower) < 3:
         return "Inconnu"
+    
+    # Vérifier si c'est vraiment juste le nom du véhicule (ex: "FS 1 Istres", "FS Istres")
+    # et pas un statut valide qui contient ces mots
+    if ("istres" in status_lower or ("fs" in status_lower and "sur" not in status_lower)) and len(status_lower) < 20:
+        # Si c'est court et contient le nom, c'est probablement juste le nom
+        # Mais vérifier d'abord si c'est un statut connu
+        known_status_keywords = ["disponible", "indisponible", "intervention", "désinfection", "alerté", "rentre", "sur les lieux", "se rend"]
+        if not any(keyword in status_lower for keyword in known_status_keywords):
+            return "Inconnu"
     
     # Statuts exacts du flux RSS (selon https://monpompier.com/flux/vehicules/2439.xml)
     status_mapping = {
@@ -216,6 +226,8 @@ def extract_status_from_description(description: str) -> str:
         match = re.search(pattern, status, re.IGNORECASE)
         if match:
             extracted_status = match.group(1).strip()
+            print(f"  🔍 Statut extrait après 'est :': '{extracted_status}'")
+            
             # Nettoyer le statut extrait
             extracted_status = re.sub(r'\d+[/-]\d+[/-]\d+', '', extracted_status)  # Enlever les dates
             extracted_status = re.sub(r'%[^%]*%', '', extracted_status)  # Enlever les pourcentages
@@ -223,10 +235,15 @@ def extract_status_from_description(description: str) -> str:
             
             if len(extracted_status) > 2:
                 # Normaliser le statut extrait
-                return normalize_status(extracted_status)
+                normalized = normalize_status(extracted_status)
+                print(f"  ✅ Statut normalisé: '{normalized}'")
+                return normalized
+            else:
+                print(f"  ⚠️ Statut extrait trop court: '{extracted_status}'")
     
     # Si aucun pattern "est :" trouvé, chercher des mots-clés de statut dans le texte
     status_lower = status.lower()
+    print(f"  ⚠️ Aucun pattern 'est :' trouvé, recherche de mots-clés dans: '{status[:100]}'")
     
     # Mots-clés de statut possibles
     status_keywords = [
@@ -234,9 +251,9 @@ def extract_status_from_description(description: str) -> str:
         ("indisponible matériel", "Indisponible matériel"),
         ("indisponible opérationnel", "Indisponible opérationnel"),
         ("indisponible", "Indisponible opérationnel"),
-        ("désinfection", "Désinfection en cours"),
+        ("désinfection", "Désinfection"),
         ("intervention", "En intervention"),
-        ("sur les lieux", "En intervention"),
+        ("sur les lieux", "Sur les lieux"),
         ("retour service", "Retour service"),
         ("hors service", "Hors service"),
     ]
@@ -244,6 +261,7 @@ def extract_status_from_description(description: str) -> str:
     # Chercher le premier mot-clé trouvé
     for keyword, normalized in status_keywords:
         if keyword in status_lower:
+            print(f"  ✅ Mot-clé trouvé: '{keyword}' → '{normalized}'")
             return normalized
     
     # Si aucun mot-clé trouvé, retourner une version nettoyée
@@ -253,6 +271,7 @@ def extract_status_from_description(description: str) -> str:
     cleaned = re.sub(r'[^\w\s]', ' ', cleaned)
     cleaned = ' '.join(cleaned.split())
     
+    print(f"  ⚠️ Aucun mot-clé trouvé, retour du texte nettoyé: '{cleaned[:100]}'")
     return cleaned[:100] if cleaned else ""
 
 def parse_rss(content: str) -> list[dict]:
