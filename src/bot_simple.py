@@ -226,14 +226,21 @@ def extract_status_from_description(description: str) -> str:
         match = re.search(pattern, status, re.IGNORECASE)
         if match:
             extracted_status = match.group(1).strip()
+            print(f"  🔍 [EXTRACT] Statut extrait après 'est :': '{extracted_status}'")
+            
             # Nettoyer le statut extrait
             extracted_status = re.sub(r'\d+[/-]\d+[/-]\d+', '', extracted_status)  # Enlever les dates
             extracted_status = re.sub(r'%[^%]*%', '', extracted_status)  # Enlever les pourcentages
             extracted_status = extracted_status.strip()
             
             if len(extracted_status) > 2:
+                print(f"  ✅ [EXTRACT] Statut nettoyé: '{extracted_status}'")
                 # Normaliser le statut extrait
-                return normalize_status(extracted_status)
+                normalized = normalize_status(extracted_status)
+                print(f"  📊 [EXTRACT] Statut normalisé: '{normalized}'")
+                return normalized
+            else:
+                print(f"  ⚠️ [EXTRACT] Statut trop court après nettoyage: '{extracted_status}'")
     
     # Si aucun pattern "est :" trouvé, chercher des mots-clés de statut dans le texte
     status_lower = status.lower()
