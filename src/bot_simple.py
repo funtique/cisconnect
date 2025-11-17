@@ -50,6 +50,17 @@ async def init_db():
                 poll_seconds INTEGER DEFAULT 60
             )
         ''')
+        
+        # Migration : ajouter les colonnes de désinfection si elles n'existent pas
+        try:
+            await db.execute('ALTER TABLE guild_configs ADD COLUMN channel_disinfection_id TEXT')
+        except Exception:
+            pass  # La colonne existe déjà
+        
+        try:
+            await db.execute('ALTER TABLE guild_configs ADD COLUMN role_disinfection_id TEXT')
+        except Exception:
+            pass  # La colonne existe déjà
         # Table des véhicules
         await db.execute('''
             CREATE TABLE IF NOT EXISTS vehicles (
