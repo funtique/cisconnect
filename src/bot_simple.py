@@ -85,7 +85,9 @@ def normalize_status(status: str) -> str:
     """Normalise le statut du véhicule"""
     if not status:
         return "Inconnu"
-    status_lower = status.lower()
+    status_lower = status.lower().strip()
+    
+    # Statuts normalisés
     if "disponible" in status_lower and "indisponible" not in status_lower:
         return "Disponible"
     elif "indisponible" in status_lower and "matériel" in status_lower:
@@ -94,13 +96,20 @@ def normalize_status(status: str) -> str:
         return "Indisponible opérationnel"
     elif "désinfection" in status_lower:
         return "Désinfection en cours"
-    elif "intervention" in status_lower:
+    elif "intervention" in status_lower or "sur les lieux" in status_lower:
         return "En intervention"
-    elif "retour" in status_lower:
+    elif "retour" in status_lower or "retour service" in status_lower:
         return "Retour service"
     elif "hors service" in status_lower:
         return "Hors service"
-    return status
+    
+    # Si le statut contient juste le nom du véhicule ou des données brutes, retourner "Inconnu"
+    # pour éviter d'afficher le nom du véhicule comme statut
+    if len(status_lower) < 3 or "istres" in status_lower or "fs" in status_lower:
+        return "Inconnu"
+    
+    # Sinon, retourner le statut tel quel (capitalisé)
+    return status.strip().capitalize()
 
 async def fetch_rss(url: str) -> tuple[dict, str | None]:
     """Récupère le contenu RSS"""
@@ -129,7 +138,27 @@ def extract_status_from_description(description: str) -> str:
     # Nettoyer le HTML
     status = re.sub(r'<[^>]+>', '', description)
     
-    # Chercher des mots-clés de statut dans le texte
+    # Pattern pour extraire le statut après "est :" ou ":"
+    # Exemple: "le FS 1 Istres est : Sur les lieux"
+    patterns = [
+        r'est\s*:\s*(.+?)(?:\.|$)',  # "est : [statut]"
+        r':\s*(.+?)(?:\.|$)',         # ": [statut]"
+    ]
+    
+    for pattern in patterns:
+        match = re.search(pattern, status, re.IGNORECASE)
+        if match:
+            extracted_status = match.group(1).strip()
+            # Nettoyer le statut extrait
+            extracted_status = re.sub(r'\d+[/-]\d+[/-]\d+', '', extracted_status)  # Enlever les dates
+            extracted_status = re.sub(r'%[^%]*%', '', extracted_status)  # Enlever les pourcentages
+            extracted_status = extracted_status.strip()
+            
+            if len(extracted_status) > 2:
+                # Normaliser le statut extrait
+                return normalize_status(extracted_status)
+    
+    # Si aucun pattern "est :" trouvé, chercher des mots-clés de statut dans le texte
     status_lower = status.lower()
     
     # Mots-clés de statut possibles
@@ -140,6 +169,7 @@ def extract_status_from_description(description: str) -> str:
         ("indisponible", "Indisponible opérationnel"),
         ("désinfection", "Désinfection en cours"),
         ("intervention", "En intervention"),
+        ("sur les lieux", "En intervention"),
         ("retour service", "Retour service"),
         ("hors service", "Hors service"),
     ]
@@ -147,24 +177,9 @@ def extract_status_from_description(description: str) -> str:
     # Chercher le premier mot-clé trouvé
     for keyword, normalized in status_keywords:
         if keyword in status_lower:
-            # Essayer d'extraire une phrase complète contenant le statut
-            # Chercher autour du mot-clé (50 caractères avant et après)
-            pattern = f".{{0,50}}{re.escape(keyword)}.{{0,50}}"
-            match = re.search(pattern, status_lower, re.IGNORECASE)
-            if match:
-                extracted = match.group(0).strip()
-                # Nettoyer les caractères spéciaux et dates
-                extracted = re.sub(r'\d+[/-]\d+[/-]\d+', '', extracted)  # Enlever les dates
-                extracted = re.sub(r'%[^%]*%', '', extracted)  # Enlever les pourcentages
-                extracted = re.sub(r'\d+', '', extracted)  # Enlever les nombres isolés
-                extracted = re.sub(r'[^\w\s]', ' ', extracted)  # Garder seulement lettres et espaces
-                extracted = ' '.join(extracted.split())  # Normaliser les espaces
-                
-                if len(extracted) > 3:
-                    return normalized
+            return normalized
     
-    # Si aucun mot-clé trouvé, chercher dans le titre ou retourner une version nettoyée
-    # Enlever les dates et nombres
+    # Si aucun mot-clé trouvé, retourner une version nettoyée
     cleaned = re.sub(r'\d+[/-]\d+[/-]\d+', '', status)
     cleaned = re.sub(r'%[^%]*%', '', cleaned)
     cleaned = re.sub(r'\d+', '', cleaned)
