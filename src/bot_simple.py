@@ -232,15 +232,50 @@ async def on_ready():
         import traceback
         traceback.print_exc()
     
-    # Synchronisation globale
+    # Synchronisation des commandes
     try:
-        print("🔄 Synchronisation globale des commandes...")
-        synced = await tree.sync()
-        print(f"✅ {len(synced)} commandes synchronisées globalement")
-        for cmd in synced:
-            print(f"  - /{cmd.name}: {cmd.description}")
+        # Essayer d'abord la synchronisation sur le serveur de développement (plus rapide, évite le cache)
+        # Récupérer le premier serveur configuré
+        async with aiosqlite.connect(DB_PATH) as db:
+            cursor = await db.execute('SELECT guild_id FROM guild_configs LIMIT 1')
+            guild_row = await cursor.fetchone()
+            
+            if guild_row:
+                guild_id_str = guild_row[0]
+                try:
+                    guild_id = int(guild_id_str)
+                    guild = client.get_guild(guild_id)
+                    
+                    if guild:
+                        print(f"🔄 Synchronisation des commandes sur le serveur: {guild.name} (ID: {guild_id})")
+                        # Copier les commandes globales vers le serveur
+                        tree.copy_global_to(guild=guild)
+                        # Synchroniser uniquement sur ce serveur (instantané, évite le cache)
+                        synced = await tree.sync(guild=guild)
+                        print(f"✅ {len(synced)} commandes synchronisées instantanément sur le serveur")
+                        for cmd in synced:
+                            print(f"  - /{cmd.name}: {cmd.description}")
+                    else:
+                        print(f"⚠️ Serveur {guild_id} introuvable, synchronisation globale...")
+                        synced = await tree.sync()
+                        print(f"✅ {len(synced)} commandes synchronisées globalement")
+                        for cmd in synced:
+                            print(f"  - /{cmd.name}: {cmd.description}")
+                except (ValueError, TypeError):
+                    print("⚠️ ID de serveur invalide, synchronisation globale...")
+                    synced = await tree.sync()
+                    print(f"✅ {len(synced)} commandes synchronisées globalement")
+                    for cmd in synced:
+                        print(f"  - /{cmd.name}: {cmd.description}")
+            else:
+                # Pas de serveur configuré, synchronisation globale
+                print("🔄 Synchronisation globale des commandes...")
+                synced = await tree.sync()
+                print(f"✅ {len(synced)} commandes synchronisées globalement")
+                for cmd in synced:
+                    print(f"  - /{cmd.name}: {cmd.description}")
     except Exception as e:
-        print(f"❌ Erreur sync globale: {e}")
+        print(f"❌ Erreur sync: {e}")
         import traceback
         traceback.print_exc()
     
