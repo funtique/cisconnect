@@ -37,28 +37,49 @@ Ces commandes nécessitent les permissions d'administrateur sur le serveur Disco
 **Description** : Configure le bot pour votre serveur Discord. Cette commande doit être exécutée en premier.
 
 **Paramètres** :
-- `channel` (obligatoire) : Le salon Discord où les notifications seront envoyées
-- `role_maintenance` (obligatoire) : Le rôle Discord qui sera mentionné pour les notifications de maintenance
+- `channel` (obligatoire) : Le salon Discord où les notifications de maintenance seront envoyées
+- `role_maintenance` (obligatoire) : Le rôle Discord qui sera mentionné pour les notifications de maintenance (indisponibilité matériel)
 - `poll_seconds` (optionnel) : L'intervalle de vérification des flux RSS en secondes (défaut : 60, minimum : 30, maximum : 300)
+- `channel_disinfection` (optionnel) : Le salon Discord où les notifications de désinfection VSAV seront envoyées
+- `role_disinfection` (optionnel) : Le rôle Discord qui sera mentionné pour les notifications de désinfection VSAV
 
-**Exemple** :
+**Exemples** :
+
+Configuration minimale (sans notifications de désinfection) :
 ```
-/setup channel:#notifications role_maintenance:@Maintenance poll_seconds:60
+/setup channel:#notifications role_maintenance:@Maintenance
+```
+
+Configuration complète (avec notifications de désinfection VSAV) :
+```
+/setup channel:#notifications role_maintenance:@Maintenance poll_seconds:60 channel_disinfection:#desinfection role_disinfection:@Agents
+```
+
+Configuration avec polling personnalisé :
+```
+/setup channel:#notifications role_maintenance:@Maintenance poll_seconds:120
 ```
 
 **Ce que fait la commande** :
-- Enregistre le salon de notifications
+- Enregistre le salon de notifications de maintenance
 - Enregistre le rôle de maintenance
 - Configure l'intervalle de polling
+- Enregistre le salon et le rôle de désinfection (si fournis)
 - Affiche un résumé de la configuration
 
 **Réponse** : Un embed Discord avec :
-- ✅ Le salon configuré
+- ✅ Le salon de notifications configuré
 - ✅ Le rôle de maintenance
 - ✅ L'intervalle de polling
-- ℹ️ Un avertissement si le rôle n'est pas mentionnable
+- ✅ Le salon et le rôle de désinfection (si configurés)
+- ⚠️ Un avertissement si la désinfection n'est pas configurée
+- ℹ️ Un avertissement si les rôles ne sont pas mentionnables
 
-**Note** : Si le rôle n'est pas mentionnable, pensez à l'autoriser dans les paramètres du serveur pour que les mentions fonctionnent.
+**Notes importantes** :
+- Les paramètres `channel_disinfection` et `role_disinfection` doivent être configurés **ensemble** pour que les notifications de désinfection VSAV fonctionnent
+- Si la désinfection n'est pas configurée, les notifications de désinfection pour les VSAV ne seront pas envoyées
+- Si un rôle n'est pas mentionnable, pensez à l'autoriser dans les paramètres du serveur pour que les mentions fonctionnent
+- Les notifications de désinfection sont envoyées **uniquement pour les véhicules VSAV** (détection automatique basée sur le nom du véhicule)
 
 ---
 
@@ -300,11 +321,16 @@ Ces commandes peuvent être utilisées par tous les membres du serveur.
 1. **Inviter le bot** sur le serveur Discord
 2. **Créer un salon** pour les notifications (ex: `#notifications`)
 3. **Créer un rôle** pour la maintenance (ex: `@Maintenance`)
-4. **Exécuter `/setup`** :
+4. **Optionnel** : Créer un salon et un rôle pour les notifications de désinfection VSAV (ex: `#desinfection` et `@Agents`)
+5. **Exécuter `/setup`** :
+   ```
+   /setup channel:#notifications role_maintenance:@Maintenance poll_seconds:60 channel_disinfection:#desinfection role_disinfection:@Agents
+   ```
+   Ou configuration minimale sans désinfection :
    ```
    /setup channel:#notifications role_maintenance:@Maintenance poll_seconds:60
    ```
-5. **Vérifier la configuration** avec le message de confirmation
+6. **Vérifier la configuration** avec le message de confirmation
 
 ### Scénario 2 : Ajouter plusieurs véhicules
 
@@ -382,7 +408,15 @@ Ces commandes peuvent être utilisées par tous les membres du serveur.
 
 ### Q: Que signifie "Le rôle n'est pas mentionnable" ?
 
-**R:** Discord permet de rendre un rôle non mentionnable pour éviter le spam. Si vous voulez que le bot puisse mentionner le rôle de maintenance, allez dans les paramètres du serveur → Rôles → Activez "Autoriser les mentions de ce rôle".
+**R:** Discord permet de rendre un rôle non mentionnable pour éviter le spam. Si vous voulez que le bot puisse mentionner le rôle de maintenance ou de désinfection, allez dans les paramètres du serveur → Rôles → Activez "Autoriser les mentions de ce rôle".
+
+### Q: Comment fonctionnent les notifications de désinfection VSAV ?
+
+**R:** Les notifications de désinfection sont envoyées **uniquement pour les véhicules VSAV** (détection automatique basée sur le nom du véhicule contenant "VSAV"). Quand un VSAV passe en statut "Désinfection" ou "Désinfection en cours", le bot envoie une notification dans le salon de désinfection configuré avec mention du rôle de désinfection. Pour que cela fonctionne, vous devez configurer `channel_disinfection` et `role_disinfection` dans la commande `/setup`.
+
+### Q: Puis-je configurer la désinfection après avoir fait `/setup` ?
+
+**R:** Oui, vous pouvez réexécuter `/setup` avec les paramètres de désinfection. La configuration sera mise à jour. Vous pouvez aussi réexécuter `/setup` sans les paramètres de désinfection si vous ne voulez plus ces notifications.
 
 ---
 
