@@ -45,6 +45,8 @@ async def init_db():
                 guild_id TEXT PRIMARY KEY,
                 channel_id TEXT,
                 role_maintenance_id TEXT,
+                channel_disinfection_id TEXT,
+                role_disinfection_id TEXT,
                 poll_seconds INTEGER DEFAULT 60
             )
         ''')
@@ -113,7 +115,7 @@ def normalize_status(status: str) -> str:
         "en intervention": "En intervention",
         
         # Autres statuts
-        "désinfection": "Désinfection en cours",
+        "désinfection": "Désinfection",
         "désinfection en cours": "Désinfection en cours",
         "retour service": "Retour service",
         "retour": "Retour service",
@@ -150,7 +152,10 @@ def normalize_status(status: str) -> str:
     elif "alerté" in status_lower or "alerte" in status_lower:
         return "Alerté"
     elif "désinfection" in status_lower:
-        return "Désinfection en cours"
+        if "en cours" in status_lower:
+            return "Désinfection en cours"
+        else:
+            return "Désinfection"
     elif "retour" in status_lower:
         return "Retour service"
     elif "hors service" in status_lower:
@@ -490,14 +495,14 @@ async def poll_feeds():
                             
                             # Récupérer la config du serveur
                             cursor = await db.execute('''
-                                SELECT channel_id, role_maintenance_id
+                                SELECT channel_id, role_maintenance_id, channel_disinfection_id, role_disinfection_id
                                 FROM guild_configs
                                 WHERE guild_id = ?
                             ''', (guild_id,))
                             config = await cursor.fetchone()
                             
                             if config:
-                                channel_id, role_id = config
+                                channel_id, role_maintenance_id, channel_disinfection_id, role_disinfection_id = config
                                 
                                 # Notification selon le statut
                                 if new_status == "Disponible":
@@ -511,9 +516,18 @@ async def poll_feeds():
                                         ''', (guild_id, vehicle_id))
                                 
                                 elif new_status == "Indisponible matériel":
-                                    # Notification salon avec mention rôle
-                                    if channel_id and role_id:
-                                        await notify_maintenance(guild_id, channel_id, role_id, vehicle_name, new_status)
+                                    # Notification salon avec mention rôle maintenance
+                                    if channel_id and role_maintenance_id:
+                                        await notify_maintenance(guild_id, channel_id, role_maintenance_id, vehicle_name, new_status)
+                                
+                                elif new_status == "Désinfection" or new_status == "Désinfection en cours":
+                                    # Notification désinfection uniquement pour les VSAV
+                                    vehicle_name_upper = vehicle_name.upper()
+                                    if "VSAV" in vehicle_name_upper:
+                                        if channel_disinfection_id and role_disinfection_id:
+                                            await notify_disinfection(guild_id, channel_disinfection_id, role_disinfection_id, vehicle_name)
+                                        else:
+                                            print(f"⚠️ Configuration désinfection manquante pour {vehicle_name}")
                                 
                                 # Réinitialiser notified_available si le véhicule redevient indisponible
                                 if new_status != "Disponible" and notified_available:
@@ -606,6 +620,33 @@ async def notify_maintenance(guild_id: str, channel_id: str, role_id: str, vehic
     except Exception as e:
         print(f"❌ Erreur notify_maintenance: {e}")
 
+async def notify_disinfection(guild_id: str, channel_id: str, role_id: str, vehicle_name: str):
+    """Envoie une notification de désinfection pour les VSAV avec mention du rôle"""
+    try:
+        guild = client.get_guild(int(guild_id))
+        if not guild:
+            return
+        
+        channel = guild.get_channel(int(channel_id))
+        if not channel:
+            return
+        
+        role = guild.get_role(int(role_id))
+        if not role:
+            return
+        
+        embed = discord.Embed(
+            title="🧽 Désinfection VSAV",
+            description=f"Le **{vehicle_name}** est en désinfection.\n\n⚠️ **Action requise** : Utiliser des PA pour terminer la désinfection le plus rapidement possible.",
+            color=0x00AAFF,
+            timestamp=datetime.utcnow()
+        )
+        
+        await channel.send(f"{role.mention}", embed=embed)
+        print(f"🧽 Notification désinfection pour {vehicle_name}")
+    except Exception as e:
+        print(f"❌ Erreur notify_disinfection: {e}")
+
 # ===== COMMANDES EXISTANTES (PRESERVÉES) =====
 
 @tree.command(name="test", description="Commande de test")
@@ -614,27 +655,59 @@ async def test(interaction: discord.Interaction):
 
 @tree.command(name="setup", description="Configurer le bot pour ce serveur")
 @app_commands.checks.has_permissions(administrator=True)
-async def setup(interaction: discord.Interaction, channel: discord.TextChannel, role_maintenance: discord.Role, poll_seconds: int = 60):
+async def setup(
+    interaction: discord.Interaction, 
+    channel: discord.TextChannel, 
+    role_maintenance: discord.Role, 
+    poll_seconds: int = 60,
+    channel_disinfection: discord.TextChannel = None,
+    role_disinfection: discord.Role = None
+):
     if poll_seconds < 30 or poll_seconds > 300:
         await interaction.response.send_message("❌ L'intervalle de polling doit être entre 30 et 300 secondes", ephemeral=True)
         return
     
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute('''
-            INSERT OR REPLACE INTO guild_configs (guild_id, channel_id, role_maintenance_id, poll_seconds)
-            VALUES (?, ?, ?, ?)
-        ''', (str(interaction.guild_id), str(channel.id), str(role_maintenance.id), poll_seconds))
+            INSERT OR REPLACE INTO guild_configs 
+            (guild_id, channel_id, role_maintenance_id, channel_disinfection_id, role_disinfection_id, poll_seconds)
+            VALUES (?, ?, ?, ?, ?, ?)
+        ''', (
+            str(interaction.guild_id), 
+            str(channel.id), 
+            str(role_maintenance.id),
+            str(channel_disinfection.id) if channel_disinfection else None,
+            str(role_disinfection.id) if role_disinfection else None,
+            poll_seconds
+        ))
         await db.commit()
     
     embed = discord.Embed(title="✅ Configuration enregistrée", color=0x00AA88)
-    embed.add_field(name="Salon", value=f"<#{channel.id}>", inline=True)
+    embed.add_field(name="Salon notifications", value=f"<#{channel.id}>", inline=True)
     embed.add_field(name="Rôle maintenance", value=f"<@&{role_maintenance.id}>", inline=True)
     embed.add_field(name="Polling", value=f"{poll_seconds}s", inline=True)
+    
+    if channel_disinfection and role_disinfection:
+        embed.add_field(name="Salon désinfection", value=f"<#{channel_disinfection.id}>", inline=True)
+        embed.add_field(name="Rôle désinfection", value=f"<@&{role_disinfection.id}>", inline=True)
+        embed.add_field(name="", value="", inline=True)  # Espace vide pour l'alignement
+    else:
+        embed.add_field(
+            name="⚠️ Désinfection VSAV", 
+            value="Non configurée. Les notifications de désinfection pour les VSAV ne fonctionneront pas.", 
+            inline=False
+        )
     
     note = None
     try:
         if not role_maintenance.mentionable:
-            note = "ℹ️ Le rôle n'est pas mentionnable. Pensez à l'autoriser si besoin."
+            note = "ℹ️ Le rôle maintenance n'est pas mentionnable. Pensez à l'autoriser si besoin."
+        if role_disinfection and not role_disinfection.mentionable:
+            if note:
+                note += "\n"
+            else:
+                note = ""
+            note += "ℹ️ Le rôle désinfection n'est pas mentionnable. Pensez à l'autoriser si besoin."
     except Exception:
         pass
     
