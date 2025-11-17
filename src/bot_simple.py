@@ -234,7 +234,14 @@ async def on_ready():
     
     # Synchronisation des commandes
     try:
-        # Essayer d'abord la synchronisation sur le serveur de développement (plus rapide, évite le cache)
+        # 1. Synchronisation globale (pour que les commandes soient disponibles sur TOUS les serveurs)
+        print("🔄 Synchronisation globale des commandes...")
+        synced_global = await tree.sync()
+        print(f"✅ {len(synced_global)} commandes synchronisées globalement (disponibles sur tous les serveurs)")
+        for cmd in synced_global:
+            print(f"  - /{cmd.name}: {cmd.description}")
+        
+        # 2. Synchronisation supplémentaire sur le serveur de développement (pour éviter le cache)
         # Récupérer le premier serveur configuré
         async with aiosqlite.connect(DB_PATH) as db:
             cursor = await db.execute('SELECT guild_id FROM guild_configs LIMIT 1')
@@ -247,33 +254,17 @@ async def on_ready():
                     guild = client.get_guild(guild_id)
                     
                     if guild:
-                        print(f"🔄 Synchronisation des commandes sur le serveur: {guild.name} (ID: {guild_id})")
+                        print(f"🔄 Synchronisation supplémentaire sur le serveur de développement: {guild.name} (ID: {guild_id})")
                         # Copier les commandes globales vers le serveur
                         tree.copy_global_to(guild=guild)
-                        # Synchroniser uniquement sur ce serveur (instantané, évite le cache)
-                        synced = await tree.sync(guild=guild)
-                        print(f"✅ {len(synced)} commandes synchronisées instantanément sur le serveur")
-                        for cmd in synced:
-                            print(f"  - /{cmd.name}: {cmd.description}")
+                        # Synchroniser sur ce serveur pour forcer la mise à jour immédiate (évite le cache)
+                        synced_guild = await tree.sync(guild=guild)
+                        print(f"✅ {len(synced_guild)} commandes synchronisées instantanément sur le serveur de développement")
+                        print("💡 Les commandes sont maintenant disponibles immédiatement sur ce serveur (pas d'attente de cache)")
                     else:
-                        print(f"⚠️ Serveur {guild_id} introuvable, synchronisation globale...")
-                        synced = await tree.sync()
-                        print(f"✅ {len(synced)} commandes synchronisées globalement")
-                        for cmd in synced:
-                            print(f"  - /{cmd.name}: {cmd.description}")
+                        print(f"⚠️ Serveur {guild_id} introuvable, synchronisation globale uniquement")
                 except (ValueError, TypeError):
-                    print("⚠️ ID de serveur invalide, synchronisation globale...")
-                    synced = await tree.sync()
-                    print(f"✅ {len(synced)} commandes synchronisées globalement")
-                    for cmd in synced:
-                        print(f"  - /{cmd.name}: {cmd.description}")
-            else:
-                # Pas de serveur configuré, synchronisation globale
-                print("🔄 Synchronisation globale des commandes...")
-                synced = await tree.sync()
-                print(f"✅ {len(synced)} commandes synchronisées globalement")
-                for cmd in synced:
-                    print(f"  - /{cmd.name}: {cmd.description}")
+                    print("⚠️ ID de serveur invalide, synchronisation globale uniquement")
     except Exception as e:
         print(f"❌ Erreur sync: {e}")
         import traceback
