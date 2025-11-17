@@ -737,21 +737,57 @@ async def status(interaction: discord.Interaction, vehicle_name: str):
             
             # Gérer le timestamp de manière sécurisée
             timestamp = None
+            formatted_date = None
             if last_seen:
                 try:
                     timestamp = datetime.fromisoformat(last_seen)
+                    # Formater la date en français
+                    formatted_date = timestamp.strftime("%d/%m/%Y à %H:%M")
                 except (ValueError, TypeError):
-                    # Si le format de date est invalide, on ignore le timestamp
-                    pass
+                    # Si le format de date est invalide, essayer de parser autrement
+                    try:
+                        timestamp = datetime.strptime(last_seen, "%Y-%m-%dT%H:%M:%S")
+                        formatted_date = timestamp.strftime("%d/%m/%Y à %H:%M")
+                    except:
+                        formatted_date = last_seen
             
+            # Créer l'embed avec les informations clairement séparées
             embed = discord.Embed(
                 title=f"{emoji} Statut de {vehicle_name_db}",
-                description=f"**Statut actuel :** {status_text}",
                 color=0x3366CC,
-                timestamp=timestamp
+                timestamp=timestamp if timestamp else None
             )
-            if last_seen:
-                embed.set_footer(text="Dernière mise à jour")
+            
+            # Ajouter le nom du véhicule
+            embed.add_field(
+                name="🚗 Véhicule",
+                value=vehicle_name_db,
+                inline=True
+            )
+            
+            # Ajouter le statut
+            embed.add_field(
+                name="📊 Statut",
+                value=status_text if status_text else "Inconnu",
+                inline=True
+            )
+            
+            # Ajouter la date de mise à jour
+            if formatted_date:
+                embed.add_field(
+                    name="🕐 Dernière mise à jour",
+                    value=formatted_date,
+                    inline=False
+                )
+            elif last_seen:
+                embed.add_field(
+                    name="🕐 Dernière mise à jour",
+                    value=last_seen,
+                    inline=False
+                )
+            
+            # Footer avec la source
+            embed.set_footer(text="Données issues du flux RSS")
             
             await interaction.response.send_message(embed=embed, ephemeral=True)
     except Exception as e:
